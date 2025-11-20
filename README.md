@@ -798,13 +798,174 @@ Focus:
 Refactor after merging the feature.
 
 ---
+Below is the **proper and professional way** to handle errors when **creating indexes** in a Spring Boot application — whether your indexes are created:
 
-# If you want, I can also give you:
+✔ Automatically by Hibernate
+✔ Manually via SQL
+✔ Via Flyway/Liquibase migrations
+✔ Programmatically in runtime
 
-🔥 A ready-made **Spring Boot fast development template**
-🔥 IntelliJ / VSCode **live templates** for controllers, services, tests
-🔥 A reusable **global exception handler**
-🔥 A clean **project folder structure**
-🔥 GitHub Actions pipeline for fast delivery
+I’ll show **all cases**, so use the one that matches your setup.
 
-Just tell me **which one you want next**.
+---
+
+# ✅ 1. **If you use Flyway (recommended by pro devs)**
+
+Flyway automatically stops the migration if index creation fails.
+But you can handle it gracefully with:
+
+### **Option A: Use `IF NOT EXISTS` (best practice)**
+
+PostgreSQL example:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id
+    ON user_devices (user_id);
+```
+
+This avoids errors like:
+
+* `duplicate key value`
+* `index already exists`
+* migration failure
+
+### **Option B: Wrap in a transaction**
+
+```sql
+BEGIN;
+
+CREATE INDEX IF NOT EXISTS idx_user_devices_token
+    ON user_devices (device_token);
+
+COMMIT;
+```
+
+---
+
+# ✅ 2. **If you use Liquibase**
+
+Liquibase lets you handle errors with `preConditions`:
+
+```xml
+<changeSet id="create-index" author="kunal">
+
+    <preConditions onFail="MARK_RAN">
+        <not>
+            <indexExists indexName="idx_user_devices_token"/>
+        </not>
+    </preConditions>
+
+    <createIndex indexName="idx_user_devices_token"
+                 tableName="user_devices">
+        <column name="device_token"/>
+    </createIndex>
+
+</changeSet>
+```
+
+👉 If index already exists → Liquibase **skips creation**, doesn’t fail deployment.
+
+---
+
+# ✅ 3. **If you use JPA/Hibernate indexes**
+
+You define them in your entity:
+
+```java
+@Table(
+    name = "user_devices",
+    indexes = {
+        @Index(name = "idx_user_devices_user", columnList = "user_id"),
+        @Index(name = "idx_user_devices_token", columnList = "device_token")
+    }
+)
+public class UserDevice { ... }
+```
+
+### How to handle errors?
+
+Hibernate applies indexes at **schema creation time** (DDL mode).
+
+If you see errors like:
+
+```
+ERROR: index "idx_user_devices_token" already exists
+```
+
+Then set the following:
+
+### **Option A: Let Hibernate ignore failures**
+
+In `application.properties`:
+
+```
+spring.jpa.properties.hibernate.hbm2ddl.halt_on_error=false
+```
+
+### **Option B: Disable Hibernate index management (best)**
+
+Remove indexes from entity → create via Flyway/Liquibase instead.
+
+**Pro devs NEVER rely on Hibernate for index creation in production**.
+
+---
+
+# ✅ 4. **If you want to create indexes programmatically at runtime**
+
+For example, run on startup with error handling.
+
+```java
+@Component
+public class IndexCreator {
+
+    private final JdbcTemplate jdbc;
+
+    public IndexCreator(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @PostConstruct
+    public void createIndexes() {
+        try {
+            jdbc.execute("CREATE INDEX IF NOT EXISTS idx_user_devices_token ON user_devices(device_token)");
+        } catch (Exception e) {
+            // Log properly but don't crash the app
+            log.error("Failed to create index idx_user_devices_token", e);
+        }
+    }
+}
+```
+
+✔ App won’t crash
+✔ Logs the cause
+✔ Index created only if missing
+
+---
+
+# 🔥 Recommended Strategy (Used by Senior Devs)
+
+### **DO NOT let Hibernate create indexes**
+
+Reason:
+
+* Non-idempotent
+* Breaks on prod
+* Hard to track changes
+
+### **Use Flyway or Liquibase for index creation**
+
+* Works in all environments
+* Supports rollbacks
+* Allows graceful error handling
+* Cleaner version control
+
+---
+
+# If you want, I can generate:
+
+✅ Flyway migration files
+✅ Liquibase XML/YAML
+✅ JPA model with proper indexes
+✅ Startup checks for index existence
+Just say **"generate index migration"**.
+
