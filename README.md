@@ -961,11 +961,15 @@ Reason:
 
 ---
 
-# If you want, I can generate:
-
-✅ Flyway migration files
-✅ Liquibase XML/YAML
-✅ JPA model with proper indexes
-✅ Startup checks for index existence
-Just say **"generate index migration"**.
+## Relationship modeling at code level
+| # | Approach                            | How it’s Stored   | Ordering Support | Performance       | Complexity | When to Use                                                 | When NOT to Use               |
+| - | ----------------------------------- | ----------------- | ---------------- | ----------------- | ---------- | ----------------------------------------------------------- | ----------------------------- |
+| 1 | **IDs only (No JPA relation)**      | `UUID pageId`     | ✅ Excellent      | ✅ Excellent       | 🟢 Low     | CMS, Navigation, Menus, Multi-tenant systems, Microservices | If you need full object graph |
+| 2 | **`@ManyToOne` (Uni)**              | FK + entity ref   | ⚠️ Limited       | ⚠️ Medium (lazy!) | 🟡 Medium  | Strong ownership (Invoice → Customer)                       | Trees, menus, deep graphs     |
+| 3 | **Bidirectional `@OneToMany`**      | FK + collections  | ❌ Painful        | ❌ Poor            | 🔴 High    | Small aggregates only                                       | Navigation, ordering, APIs    |
+| 4 | **Join Entity (Association table)** | Separate table    | ✅ Best           | ✅ Best            | 🟡 Medium  | Ordered relations, metadata, trees                          | Simple 1-1 ownership          |
+| 5 | **`@ManyToMany`**                   | Hidden join table | ❌ None           | ❌ Poor            | 🔴 High    | Rare edge cases                                             | Ordered or metadata relations |
+| 6 | **`@ElementCollection`**            | Child table       | ❌ No             | ⚠️ Medium         | 🟢 Low     | Tags, value lists                                           | Entities, navigation          |
+| 7 | **Embedded (`@Embedded`)**          | Same table        | ❌ No             | ✅ Excellent       | 🟢 Low     | Grouping fields                                             | Relations                     |
+| 8 | **DTO-only relations**              | API layer only    | ✅ Flexible       | ✅ Best            | 🟡 Medium  | API-first systems                                           | Heavy domain logic            |
 
